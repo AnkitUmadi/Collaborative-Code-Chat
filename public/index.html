@@ -1,0 +1,1764 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>CodeSync — Real-Time Collaborative Code Editor</title>
+<meta name="description" content="Free real-time collaborative code editor with multi-file projects, private rooms, version history, and live sync."/>
+<meta name="robots" content="index, follow"/>
+<link rel="canonical" id="canonical-url"/>
+<meta property="og:title" content="CodeSync — Real-Time Collaborative Code Editor"/>
+<meta property="og:description" content="Write code together in real time. Multi-file projects, private rooms, version history."/>
+<meta name="author" content="Ankit Umadi"/>
+<meta property="og:site_name" content="CodeSync by Ankit Umadi"/>
+<meta property="og:type" content="website"/>
+<meta name="twitter:card" content="summary_large_image"/>
+<meta name="twitter:title" content="CodeSync — Real-Time Collaborative Code Editor"/>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='18' fill='%237c6af7'/><text x='50' y='62' font-family='monospace' font-size='38' font-weight='bold' fill='white' text-anchor='middle'>CS</text></svg>"/>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Syne:wght@400;600;800&display=swap" rel="stylesheet"/>
+<style>
+/* ── Reset & Variables ─────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --bg:#0d0f14; --surface:#13161e; --surface2:#1a1e2a; --border:#252a38;
+  --accent:#7c6af7; --accent2:#4fd1c5; --accent3:#f6ad55;
+  --text:#e2e8f0; --muted:#6b7280; --danger:#fc8181; --success:#68d391;
+  --font-mono:'JetBrains Mono',monospace; --font-ui:'Syne',sans-serif;
+}
+html, body { height:100%; overflow:hidden; background:var(--bg); color:var(--text); font-family:var(--font-ui); }
+
+/* ── Layout: [file-explorer | editor | sidebar] ──── */
+#app {
+  display: grid;
+  grid-template-columns: 220px 1fr 280px;
+  grid-template-rows: 52px 1fr;
+  height: 100vh;
+}
+
+/* ── TOPBAR ─────────────────────────────────────────────────── */
+#topbar {
+  grid-column: 1 / -1;
+  display: flex; align-items: center; gap: 10px;
+  padding: 0 14px; background: var(--surface);
+  border-bottom: 1px solid var(--border); z-index: 10;
+}
+.logo { font-size:1.05rem; font-weight:800; letter-spacing:-0.5px; color:var(--accent); text-decoration:none; flex-shrink:0; }
+.logo span { color:var(--accent2); }
+#join-row { display:flex; align-items:center; gap:7px; flex:1; flex-wrap:wrap; }
+#join-row input {
+  background:var(--surface2); border:1px solid var(--border); color:var(--text);
+  padding:5px 9px; border-radius:6px; font-family:var(--font-ui); font-size:0.8rem;
+  outline:none; transition:border-color .2s;
+}
+#join-row input:focus { border-color:var(--accent); }
+#join-row input::placeholder { color:var(--muted); }
+#room-controls { display:none; align-items:center; gap:7px; flex:1; flex-wrap:wrap; }
+#room-badge {
+  display:none; align-items:center; gap:6px;
+  background:var(--surface2); border:1px solid var(--border);
+  padding:3px 10px 3px 10px; border-radius:20px; font-size:0.75rem;
+}
+#room-badge.visible { display:flex; }
+.room-label { color:var(--muted); font-size:0.68rem; }
+.room-name  { font-family:var(--font-mono); color:var(--accent2); font-weight:600; }
+#room-private-badge {
+  display:none; align-items:center; gap:4px; font-size:0.66rem; padding:2px 6px;
+  border-radius:4px; background:#2d1f0e; color:var(--accent3); border:1px solid #5a3f1a;
+  font-family:var(--font-mono); font-weight:600;
+}
+#lang-select {
+  background:var(--surface2); border:1px solid var(--border); color:var(--text);
+  padding:5px 8px; border-radius:6px; font-family:var(--font-mono); font-size:0.76rem;
+  outline:none; cursor:pointer;
+}
+.btn {
+  padding:5px 12px; border-radius:6px; border:none; cursor:pointer;
+  font-family:var(--font-ui); font-size:0.8rem; font-weight:600;
+  transition:all .15s; white-space:nowrap;
+}
+.btn-primary   { background:var(--accent); color:#fff; }
+.btn-primary:hover   { background:#6c5ce7; transform:translateY(-1px); }
+.btn-secondary { background:var(--surface2); color:var(--text); border:1px solid var(--border); }
+.btn-secondary:hover { border-color:var(--accent); color:var(--accent); }
+.btn-success   { background:#276749; color:var(--success); border:1px solid #276749; }
+.btn-success:hover   { background:#2f855a; }
+.btn-danger    { background:#3d1515; color:var(--danger); border:1px solid #5a1f1f; }
+.btn-danger:hover    { background:#5a1f1f; }
+#conn-status { display:flex; align-items:center; gap:5px; font-size:0.72rem; color:var(--muted); margin-left:auto; flex-shrink:0; }
+#conn-dot { width:7px; height:7px; border-radius:50%; background:var(--muted); transition:background .3s; }
+#conn-dot.online { background:var(--success); box-shadow:0 0 5px var(--success); }
+#version-badge { font-family:var(--font-mono); font-size:0.66rem; color:var(--muted); }
+#rooms-created-badge {
+  display:none; align-items:center; gap:5px;
+  background:var(--surface2); border:1px solid var(--border);
+  padding:3px 9px; border-radius:20px; font-size:0.72rem;
+  font-family:var(--font-mono); color:var(--accent3); flex-shrink:0;
+}
+#rooms-created-badge.visible { display:flex; }
+#rooms-created-badge .rc-label { font-size:0.65rem; color:var(--muted); }
+.btn-delete-room { background:#3d1515; color:var(--danger); border:1px solid #5a1f1f; }
+.btn-delete-room:hover { background:#5a1f1f; }
+
+/* ── FILE EXPLORER ──────────────────────────────────────────── */
+#file-explorer {
+  grid-column: 1; grid-row: 2;
+  background:var(--surface); border-right:1px solid var(--border);
+  display:flex; flex-direction:column; overflow:hidden;
+}
+#file-explorer .panel-header {
+  padding:9px 12px; font-size:0.67rem; font-weight:600; text-transform:uppercase;
+  letter-spacing:1px; color:var(--muted); border-bottom:1px solid var(--border);
+  display:flex; align-items:center; justify-content:space-between; flex-shrink:0;
+}
+#file-list { flex:1; overflow-y:auto; padding:4px 0; }
+#file-list::-webkit-scrollbar { width:3px; }
+#file-list::-webkit-scrollbar-thumb { background:var(--border); }
+.file-item {
+  display:flex; align-items:center; gap:6px;
+  padding:5px 10px; cursor:pointer; font-size:0.78rem;
+  font-family:var(--font-mono); color:var(--text);
+  border-left:2px solid transparent; transition:all .12s;
+  user-select:none;
+}
+.file-item:hover { background:var(--surface2); }
+.file-item.active { background:var(--surface2); border-left-color:var(--accent); color:var(--accent2); }
+.file-item .file-icon { font-size:0.7rem; opacity:0.6; }
+.file-item .file-label { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.file-item .file-del {
+  opacity:0; font-size:0.7rem; color:var(--danger); padding:1px 4px;
+  border-radius:3px; transition:opacity .12s;
+}
+.file-item:hover .file-del { opacity:1; }
+#file-new-row {
+  padding:6px 8px; border-top:1px solid var(--border); flex-shrink:0;
+  display:flex; gap:5px;
+}
+#file-new-row input {
+  flex:1; background:var(--surface2); border:1px solid var(--border); color:var(--text);
+  padding:4px 7px; border-radius:5px; font-family:var(--font-mono); font-size:0.75rem;
+  outline:none;
+}
+#file-new-row input:focus { border-color:var(--accent); }
+
+/* ── SIDEBAR ────────────────────────────────────────────────── */
+#sidebar {
+  grid-column: 3; grid-row: 2;
+  background:var(--surface); border-left:1px solid var(--border);
+  display:flex; flex-direction:column; overflow:hidden; height:100%;
+}
+.panel-header {
+  padding:9px 13px; font-size:0.67rem; font-weight:600; text-transform:uppercase;
+  letter-spacing:1px; color:var(--muted); border-bottom:1px solid var(--border);
+  display:flex; align-items:center; justify-content:space-between; flex-shrink:0;
+}
+#users-list { padding:7px; display:flex; flex-wrap:wrap; gap:5px; min-height:36px; flex-shrink:0; }
+.user-chip {
+  display:flex; align-items:center; gap:5px; padding:3px 9px; border-radius:20px;
+  background:var(--surface2); border:1px solid var(--border); font-size:0.72rem;
+  font-family:var(--font-mono); animation:fadeIn .3s ease;
+}
+.user-chip .dot { width:5px; height:5px; border-radius:50%; background:var(--success); }
+#chat-panel { flex:1; display:flex; flex-direction:column; overflow:hidden; min-height:0; }
+#chat-messages {
+  flex:1; overflow-y:auto; padding:8px 10px; display:flex; flex-direction:column;
+  gap:5px; scroll-behavior:smooth; min-height:0;
+}
+#chat-messages::-webkit-scrollbar { width:3px; }
+#chat-messages::-webkit-scrollbar-thumb { background:var(--border); }
+.msg { animation:fadeIn .25s ease; }
+.msg-meta { font-size:0.65rem; color:var(--muted); margin-bottom:2px; }
+.msg-meta .sender { color:var(--accent2); font-weight:600; }
+.msg-meta .sender.self { color:var(--accent); }
+.msg-bubble {
+  display:inline-block; background:var(--surface2); border:1px solid var(--border);
+  padding:5px 9px; border-radius:6px; font-size:0.78rem; line-height:1.4;
+  max-width:100%; word-break:break-word;
+}
+.msg.self .msg-bubble { background:#2d2560; border-color:var(--accent); }
+#typing-indicator { padding:3px 10px; min-height:17px; font-size:0.68rem; color:var(--muted); font-style:italic; flex-shrink:0; }
+#chat-input-row { padding:7px 9px; border-top:1px solid var(--border); display:flex; gap:5px; flex-shrink:0; }
+#chat-input-row input {
+  flex:1; background:var(--surface2); border:1px solid var(--border); color:var(--text);
+  padding:6px 9px; border-radius:6px; font-size:0.78rem; font-family:var(--font-ui); outline:none;
+}
+#chat-input-row input:focus { border-color:var(--accent); }
+#chat-input-row input::placeholder { color:var(--muted); }
+
+/* ── HISTORY PANEL ──────────────────────────────────────────── */
+#history-panel {
+  border-top:1px solid var(--border); flex-shrink:0;
+  display:flex; flex-direction:column; height:190px; transition:height .2s;
+}
+#history-panel.collapsed { height:34px; }
+#history-panel .panel-header { cursor:pointer; user-select:none; flex-shrink:0; }
+#history-list { overflow-y:auto; flex:1; min-height:0; padding:5px 7px; display:flex; flex-direction:column; gap:3px; }
+#history-panel.collapsed #history-list { display:none; }
+#history-list::-webkit-scrollbar { width:3px; }
+.history-item {
+  display:flex; align-items:center; gap:5px; padding:4px 7px; border-radius:5px;
+  cursor:pointer; border:1px solid transparent; transition:all .12s;
+  font-size:0.69rem; font-family:var(--font-mono); flex-shrink:0;
+}
+.history-item:hover { background:var(--surface2); border-color:var(--border); }
+.history-item.active { border-color:var(--accent); background:#2d2560; }
+.h-ver { color:var(--accent); font-weight:600; min-width:34px; }
+.h-time { color:var(--muted); flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.h-by { color:var(--accent2); max-width:56px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.h-restore {
+  padding:1px 5px; border-radius:3px; font-size:0.65rem;
+  background:var(--surface); border:1px solid var(--border);
+  color:var(--muted); opacity:0; transition:opacity .12s;
+}
+.history-item:hover .h-restore { opacity:1; }
+#history-empty { padding:14px 10px; font-size:0.7rem; color:var(--muted); text-align:center; font-style:italic; }
+
+/* ── EDITOR PANE ────────────────────────────────────────────── */
+#editor-pane { grid-column: 2; grid-row: 2; display:flex; flex-direction:column; overflow:hidden; background:var(--bg); position:relative; }
+
+/* Tabs bar */
+#tabs-bar {
+  display:flex; align-items:stretch; background:var(--surface);
+  border-bottom:1px solid var(--border); flex-shrink:0;
+  overflow-x:auto; overflow-y:hidden; min-height:34px;
+}
+#tabs-bar::-webkit-scrollbar { height:3px; }
+#tabs-bar::-webkit-scrollbar-thumb { background:var(--border); }
+.tab {
+  display:flex; align-items:center; gap:6px; padding:0 14px;
+  font-family:var(--font-mono); font-size:0.74rem; cursor:pointer;
+  border-right:1px solid var(--border); color:var(--muted);
+  white-space:nowrap; transition:all .12s; flex-shrink:0;
+  border-bottom:2px solid transparent;
+}
+.tab:hover { background:var(--surface2); color:var(--text); }
+.tab.active { color:var(--text); border-bottom-color:var(--accent); background:var(--bg); }
+.tab .tab-close {
+  opacity:0; font-size:0.72rem; color:var(--muted);
+  padding:1px 3px; border-radius:3px; margin-left:2px;
+  transition:opacity .12s;
+}
+.tab:hover .tab-close,
+.tab.active .tab-close { opacity:1; }
+.tab .tab-close:hover { color:var(--danger); }
+
+/* Editor toolbar */
+#editor-toolbar {
+  display:flex; align-items:center; gap:8px; padding:4px 12px;
+  border-bottom:1px solid var(--border); background:var(--surface); flex-shrink:0;
+}
+#editor-toolbar .spacer { flex:1; }
+#cursor-info { font-family:var(--font-mono); font-size:0.68rem; color:var(--muted); }
+#remote-cursor-badge {
+  font-size:0.68rem; padding:2px 7px; border-radius:4px;
+  background:#2d2560; color:var(--accent); border:1px solid var(--accent);
+  opacity:0; transition:opacity .3s;
+}
+#remote-cursor-badge.visible { opacity:1; }
+#editor-container { flex:1; overflow:hidden; }
+
+/* Output panel */
+#output-panel { height:170px; flex-shrink:0; border-top:1px solid var(--border); display:flex; flex-direction:column; transition:height .2s; }
+#output-panel.collapsed { height:32px; }
+/* When preview mode is active, give the panel more height */
+#output-panel.preview-mode { height:300px; }
+#output-header {
+  display:flex; align-items:center; gap:9px; padding:4px 12px;
+  background:var(--surface); border-bottom:1px solid var(--border);
+  cursor:pointer; user-select:none; flex-shrink:0;
+}
+#output-header .label { font-size:0.66rem; font-weight:600; text-transform:uppercase; letter-spacing:1px; color:var(--muted); }
+#output-run-badge { font-size:0.66rem; color:var(--muted); font-family:var(--font-mono); }
+.toggle-icon { margin-left:auto; color:var(--muted); font-size:0.78rem; }
+#output-body {
+  flex:1; overflow-y:auto; padding:9px 12px;
+  font-family:var(--font-mono); font-size:0.76rem; line-height:1.6;
+  color:var(--accent2); white-space:pre-wrap;
+}
+#output-body::-webkit-scrollbar { width:3px; }
+.out-error { color:var(--danger); }
+.out-info  { color:var(--muted); font-style:italic; }
+.collapsed #output-body { display:none; }
+
+/* Preview iframe — hidden by default, shown in preview mode */
+#preview-frame {
+  display:none; flex:1; width:100%; border:none; background:#fff;
+}
+#output-panel.preview-mode #output-body  { display:none; }
+#output-panel.preview-mode #preview-frame { display:block; }
+#output-panel.collapsed #preview-frame   { display:none; }
+
+/* Overlay */
+#no-room-overlay {
+  position:absolute; inset:0; background:rgba(13,15,20,.88);
+  display:flex; align-items:center; justify-content:center; flex-direction:column; gap:10px;
+  z-index:5; backdrop-filter:blur(4px); font-size:0.86rem; color:var(--muted);
+}
+#no-room-overlay.hidden { display:none; }
+#no-room-overlay .icon { font-size:2.4rem; }
+
+/* Toast */
+#toast {
+  position:fixed; bottom:20px; right:20px; z-index:999;
+  background:var(--surface2); border:1px solid var(--border);
+  padding:8px 14px; border-radius:8px; font-size:0.78rem;
+  box-shadow:0 8px 32px rgba(0,0,0,.5);
+  transform:translateY(12px); opacity:0; transition:all .3s; pointer-events:none;
+}
+#toast.show { transform:translateY(0); opacity:1; }
+#toast.success { border-color:var(--success); color:var(--success); }
+#toast.error   { border-color:var(--danger);  color:var(--danger); }
+
+/* Modals */
+#invite-modal, #create-modal, #pw-modal, #rename-modal {
+  display:none; position:fixed; inset:0; z-index:200;
+  background:rgba(0,0,0,.65); backdrop-filter:blur(7px);
+  align-items:center; justify-content:center;
+}
+#invite-modal.open, #create-modal.open, #pw-modal.open, #rename-modal.open { display:flex; }
+.modal-box {
+  background:var(--surface); border:1px solid var(--border);
+  border-radius:12px; padding:26px; width:420px; max-width:92vw;
+  box-shadow:0 24px 64px rgba(0,0,0,.6); animation:fadeIn .2s ease;
+}
+.modal-box h2 { font-size:0.98rem; font-weight:700; margin-bottom:4px; color:var(--text); }
+.modal-box p  { font-size:0.76rem; color:var(--muted); margin-bottom:16px; }
+.modal-input {
+  width:100%; background:var(--surface2); border:1px solid var(--border); color:var(--text);
+  padding:9px 11px; border-radius:6px; font-family:var(--font-mono); font-size:0.84rem;
+  outline:none; transition:border-color .2s; margin-bottom:12px;
+}
+.modal-input:focus { border-color:var(--accent); }
+.modal-footer { display:flex; gap:7px; justify-content:flex-end; }
+.modal-error { font-size:0.73rem; color:var(--danger); min-height:16px; margin-bottom:8px; }
+#invite-url { letter-spacing:0; color:var(--accent2); cursor:default; user-select:all; }
+#pw-input.shake { animation:shake .4s ease; border-color:var(--danger); }
+
+/* Toggle switch */
+#privacy-toggle-row {
+  display:flex; align-items:center; gap:11px; margin-bottom:13px;
+  padding:8px 11px; background:var(--surface2); border-radius:7px; border:1px solid var(--border);
+}
+.toggle-label { font-size:0.8rem; color:var(--text); cursor:pointer; flex:1; line-height:1.3; }
+.toggle-label small { font-size:0.68rem; color:var(--muted); display:block; margin-top:1px; }
+.toggle-switch { position:relative; width:30px; height:17px; flex-shrink:0; }
+.toggle-switch input { opacity:0; width:0; height:0; position:absolute; }
+.toggle-track { position:absolute; inset:0; background:var(--border); border-radius:17px; cursor:pointer; transition:background .18s; }
+.toggle-track::before { content:""; position:absolute; width:11px; height:11px; left:3px; top:3px; background:#fff; border-radius:50%; transition:transform .18s; }
+.toggle-switch input:checked + .toggle-track { background:var(--accent); }
+.toggle-switch input:checked + .toggle-track::before { transform:translateX(13px); }
+#password-field-row { display:none; flex-direction:column; gap:4px; margin-bottom:13px; }
+#password-field-row.visible { display:flex; }
+#password-field-row label { font-size:0.73rem; color:var(--muted); }
+#password-field-row input {
+  background:var(--surface2); border:1px solid var(--border); color:var(--text);
+  padding:7px 9px; border-radius:6px; font-family:var(--font-mono); font-size:0.8rem;
+  outline:none; transition:border-color .2s;
+}
+#password-field-row input:focus { border-color:var(--accent); }
+
+@keyframes fadeIn { from { opacity:0; transform:translateY(4px); } to { opacity:1; transform:none; } }
+@keyframes shake {
+  0%,100% { transform:translateX(0); } 20% { transform:translateX(-5px); }
+  40% { transform:translateX(5px); }    60% { transform:translateX(-3px); }
+  80% { transform:translateX(3px); }
+}
+/* ── MY ROOMS PANEL ─────────────────────────────────────────── */
+#my-rooms-panel {
+  border-top:1px solid var(--border); flex-shrink:0;
+  display:flex; flex-direction:column; height:200px; transition:height .2s;
+}
+#my-rooms-panel.collapsed { height:34px; }
+#my-rooms-panel .panel-header { cursor:pointer; user-select:none; flex-shrink:0; }
+#my-rooms-list {
+  overflow-y:auto; flex:1; min-height:0; padding:5px 7px;
+  display:flex; flex-direction:column; gap:3px;
+}
+#my-rooms-panel.collapsed #my-rooms-list { display:none; }
+#my-rooms-list::-webkit-scrollbar { width:3px; }
+#my-rooms-list::-webkit-scrollbar-thumb { background:var(--border); }
+.room-entry {
+  display:flex; align-items:center; gap:5px; padding:5px 7px; border-radius:5px;
+  border:1px solid transparent; transition:all .12s; font-size:0.69rem;
+  font-family:var(--font-mono); flex-shrink:0; cursor:pointer;
+}
+.room-entry:hover { background:var(--surface2); border-color:var(--border); }
+.room-entry.active-room { border-color:var(--accent); background:#1e1b3a; }
+.re-badge {
+  font-size:0.58rem; padding:1px 5px; border-radius:3px; font-weight:700;
+  flex-shrink:0; font-family:var(--font-ui);
+}
+.re-badge.created { background:#2d1f5a; color:var(--accent); border:1px solid var(--accent); }
+.re-badge.joined  { background:#1a2d2a; color:var(--accent2); border:1px solid var(--accent2); }
+.re-name { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--text); }
+.re-time { font-size:0.62rem; color:var(--muted); flex-shrink:0; white-space:nowrap; }
+.re-join-btn {
+  opacity:0; font-size:0.65rem; padding:2px 6px; border-radius:3px;
+  background:var(--accent); color:#fff; border:none; cursor:pointer;
+  transition:opacity .12s; flex-shrink:0;
+}
+.room-entry:hover .re-join-btn { opacity:1; }
+.room-entry.active-room .re-join-btn { opacity:0; pointer-events:none; }
+/* Deleted room dismiss is always visible */
+.room-entry .re-dismiss { opacity:1 !important; }
+#my-rooms-empty {
+  padding:14px 10px; font-size:0.7rem; color:var(--muted);
+  text-align:center; font-style:italic;
+}
+
+/* ── Creator credit ─────────────────────────────────────────── */
+#creator-credit {
+  padding:8px 13px; font-size:0.62rem; color:var(--muted);
+  border-top:1px solid var(--border); text-align:center;
+  letter-spacing:0.3px; flex-shrink:0; opacity:0.6;
+}
+#creator-credit a { color:var(--muted); text-decoration:none; }
+#creator-credit a:hover { color:var(--accent2); }
+</style>
+</head>
+<body>
+
+<div id="invite-modal" onclick="closeInviteModal(event)">
+  <div class="modal-box">
+    <h2>Invite to room</h2>
+    <p>Share this link — anyone opens it and gets dropped straight in.</p>
+    <input id="invite-url" class="modal-input" readonly/>
+    <div class="modal-footer">
+      <button type="button" class="btn btn-primary" onclick="copyInviteLink()">Copy link</button>
+      <button type="button" class="btn btn-secondary" onclick="closeInviteModal()">Close</button>
+    </div>
+  </div>
+</div>
+
+<div id="pw-modal" role="dialog" aria-modal="true" aria-labelledby="pw-title">
+  <div class="modal-box">
+    <h2 id="pw-title">🔒 Private Room</h2>
+    <p>Enter the password to join this room.</p>
+    <input id="pw-input" class="modal-input" type="password" placeholder="Room password"
+           autocomplete="current-password" onkeydown="if(event.key==='Enter')submitPassword()"/>
+    <div id="pw-error" class="modal-error"></div>
+    <div class="modal-footer">
+      <button type="button" class="btn btn-secondary" onclick="cancelPasswordModal()">Cancel</button>
+      <button type="button" class="btn btn-primary"   onclick="submitPassword()">Join</button>
+    </div>
+  </div>
+</div>
+
+<div id="create-modal" role="dialog" aria-modal="true" aria-labelledby="create-title">
+  <div class="modal-box">
+    <h2 id="create-title">Create a Room</h2>
+    <p>A unique Room ID is generated automatically.</p>
+    <div id="privacy-toggle-row">
+      <label for="private-toggle" class="toggle-label">
+        Make this room private
+        <small>Only people with the password can join</small>
+      </label>
+      <label class="toggle-switch" aria-label="Private room toggle">
+        <input type="checkbox" id="private-toggle" onchange="onPrivateToggle()"/>
+        <span class="toggle-track"></span>
+      </label>
+    </div>
+    <div id="password-field-row">
+      <label for="room-password-input">Password (min 4 characters)</label>
+      <input id="room-password-input" type="password" placeholder="Choose a password"
+             autocomplete="new-password" onkeydown="if(event.key==='Enter')submitCreateRoom()"/>
+    </div>
+    <div id="create-error" class="modal-error"></div>
+    <div class="modal-footer">
+      <button type="button" class="btn btn-secondary" onclick="closeCreateModal()">Cancel</button>
+      <button type="button" class="btn btn-primary"   onclick="submitCreateRoom()">Create Room</button>
+    </div>
+  </div>
+</div>
+
+<div id="rename-modal" role="dialog" aria-modal="true">
+  <div class="modal-box">
+    <h2>Rename file</h2>
+    <p>Enter a new name for the file.</p>
+    <input id="rename-input" class="modal-input" type="text" placeholder="new-name.js"
+           autocomplete="off" onkeydown="if(event.key==='Enter')submitRename()"/>
+    <div id="rename-error" class="modal-error"></div>
+    <div class="modal-footer">
+      <button type="button" class="btn btn-secondary" onclick="closeRenameModal()">Cancel</button>
+      <button type="button" class="btn btn-primary"   onclick="submitRename()">Rename</button>
+    </div>
+  </div>
+</div>
+
+<div id="app">
+
+  <div id="topbar">
+    <div class="logo">Code<span>Sync</span></div>
+
+    <div id="join-row">
+      <input id="username"   name="username"  placeholder="Your name"  maxlength="20"
+             autocomplete="nickname" onblur="onUsernameBlur()"/>
+      <input id="room-input" name="room"      placeholder="Room ID"    maxlength="30"
+             autocomplete="off"/>
+      <button type="button" class="btn btn-primary" id="join-btn" disabled
+              style="opacity:0.5" onclick="joinRoom()">Join Room</button>
+      <button type="button" class="btn btn-secondary" onclick="createRoom()">+ Create Room</button>
+    </div>
+
+    <div id="room-controls">
+      <div id="room-badge">
+        <span class="room-label">ROOM</span>
+        <span class="room-name" id="room-badge-name"></span>
+        <span id="room-private-badge">🔒 Private</span>
+      </div>
+      <!-- PART 2: Restricted language dropdown — only supported languages -->
+      <select id="lang-select" onchange="changeLanguage(this.value)">
+        <option value="javascript">JavaScript</option>
+        <option value="typescript">TypeScript</option>
+        <option value="html">HTML</option>
+        <option value="css">CSS</option>
+        <option value="json">JSON</option>
+      </select>
+      <button type="button" class="btn btn-secondary" onclick="openInviteModal()">🔗 Invite</button>
+      <button type="button" class="btn btn-success"   onclick="runCode()">▶ Run</button>
+      <button type="button" class="btn btn-secondary" onclick="saveCode()">⬇ Save</button>
+      <button type="button" class="btn btn-secondary" onclick="saveCheckpoint()" title="Save checkpoint">⚑</button>
+      <!-- Delete Room — only visible to the room creator -->
+      <button type="button" class="btn btn-delete-room" id="delete-room-btn"
+              style="display:none" onclick="deleteRoom()">🗑 Delete Room</button>
+      <button type="button" class="btn btn-danger"    onclick="leaveRoom()">Leave</button>
+    </div>
+
+    <div id="rooms-created-badge">
+      <span class="rc-label">Rooms created</span>
+      <span id="rooms-created-count">0</span>
+    </div>
+
+    <span id="version-badge"></span>
+    <div id="conn-status">
+      <div id="conn-dot"></div>
+      <span id="conn-label">Disconnected</span>
+    </div>
+  </div>
+
+  <div id="file-explorer">
+    <div class="panel-header">
+      <span>Files</span>
+      <span id="file-count" style="font-size:0.65rem;">0/10</span>
+    </div>
+    <div id="file-list"></div>
+    <div id="file-new-row">
+      <input id="new-file-input" type="text" placeholder="filename.js"
+             autocomplete="off" onkeydown="handleNewFileKey(event)"/>
+      <button type="button" class="btn btn-primary" style="padding:4px 8px;font-size:0.78rem;"
+              onclick="submitNewFile()">+</button>
+    </div>
+  </div>
+
+  <div id="sidebar">
+    <div>
+      <div class="panel-header"><span>Online</span><span id="user-count">0</span></div>
+      <div id="users-list"></div>
+    </div>
+    <div id="chat-panel">
+      <div class="panel-header">Chat</div>
+      <div id="chat-messages"></div>
+      <div id="typing-indicator"></div>
+      <div id="chat-input-row">
+        <input id="msg-input" placeholder="Message…"
+               onkeydown="handleChatKey(event)" oninput="handleTyping()"/>
+        <button type="button" class="btn btn-primary" onclick="sendMessage()">↑</button>
+      </div>
+    </div>
+    <div id="history-panel">
+      <div class="panel-header" onclick="toggleHistoryPanel()">
+        <span>Version History</span>
+        <span id="history-toggle-icon">▲</span>
+      </div>
+      <div id="history-list">
+        <div id="history-empty">No snapshots yet</div>
+      </div>
+    </div>
+    <div id="my-rooms-panel">
+      <div class="panel-header" onclick="toggleMyRoomsPanel()">
+        <span>My Rooms</span>
+        <span id="my-rooms-toggle-icon">▲</span>
+      </div>
+      <div id="my-rooms-list">
+        <div id="my-rooms-empty">No rooms yet. Create or join one!</div>
+      </div>
+    </div>
+    <div id="creator-credit">Created by Ankit Umadi</div>
+  </div>
+
+  <div id="editor-pane">
+    <div id="tabs-bar"></div>
+    <div id="editor-toolbar">
+      <span class="spacer"></span>
+      <span id="remote-cursor-badge"></span>
+      <span id="cursor-info">Ln 1, Col 1</span>
+    </div>
+    <div id="editor-container"></div>
+    <div id="output-panel">
+      <div id="output-header" onclick="toggleOutput()">
+        <span class="label" id="output-label">Output</span>
+        <span id="output-run-badge"></span>
+        <span class="toggle-icon">▼</span>
+      </div>
+      <!-- Console output (JS mode) -->
+      <div id="output-body"><span class="out-info">Run your code to see output here.</span></div>
+      <!-- HTML preview iframe (preview mode) — sandbox prevents parent access -->
+      <iframe id="preview-frame" sandbox="allow-scripts allow-same-origin allow-forms allow-modals" title="HTML Preview"></iframe>
+    </div>
+    <div id="no-room-overlay">
+      <div class="icon">⌨</div>
+      <div>Enter your name and a Room ID to start coding together</div>
+    </div>
+  </div>
+
+</div>
+<div id="toast"></div>
+
+<script>document.getElementById("canonical-url").href = window.location.origin + "/";</script>
+
+<script src="/socket.io/socket.io.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs/loader.js"></script>
+
+<script>
+// ── Creator attribution ───────────────────────────────────────
+console.log("CodeSync — created by Ankit Umadi");
+
+// ═══════════════════════════════════════════════════════════════
+// LOCALSTORAGE WRAPPER
+// ═══════════════════════════════════════════════════════════════
+const LS_USERNAME_KEY  = "codesync_username";
+const LS_MY_ROOMS_KEY  = "codesync_my_rooms";   // persists room history
+const ls = {
+  get(k)    { try { return localStorage.getItem(k) ?? null; } catch { return null; } },
+  set(k, v) { if (String(v).length > 200) return false; try { localStorage.setItem(k, v); return true; } catch { return false; } },
+  setRaw(k, v) { try { localStorage.setItem(k, v); return true; } catch { return false; } },
+  remove(k) { try { localStorage.removeItem(k); } catch {} },
+};
+
+// ═══════════════════════════════════════════════════════════════
+// STATE
+// ═══════════════════════════════════════════════════════════════
+const socket = io({
+  reconnection: true, reconnectionAttempts: Infinity,
+  reconnectionDelay: 1000, reconnectionDelayMax: 8000,
+});
+
+let username = "";
+let room     = "";
+let editor;
+
+let projectFiles = {};
+let activeFile   = "";
+let openTabs     = [];
+let fileVersions = {};
+
+let isRemoteUpdate    = false;
+let codeDebounceTimer = null;
+const CODE_DEBOUNCE_MS = 80;
+let cursorThrottleTimer = null;
+let pendingCursorPos    = null;
+const CURSOR_THROTTLE_MS = 50;
+let typingTimer     = null;
+let isTyping        = false;
+let outputCollapsed = false;
+let currentLanguage = "javascript";
+
+let historyPanelOpen   = true;
+let currentRestoredVer = null;
+let isCreator          = false;   // true only for the socket that created this room
+let myRoomsPanelOpen   = true;
+
+let _pendingIsPrivate = false;
+let _pwTarget         = null;
+let _renameTarget     = null;
+let roomCheckTimer    = null;
+
+// PART 3: Restricted langFileMap — only supported languages
+const langFileMap = {
+  javascript: "main.js",
+  typescript: "main.ts",
+  html:       "index.html",
+  css:        "style.css",
+  json:       "data.json",
+};
+
+// PART 4: Restricted langFromPath — only supported extensions
+// Falls back to "javascript" for any unknown/unsupported extension
+// (backward compat: old rooms with .py, .java etc. still load without crashing)
+function langFromPath(p) {
+  const ext = (p.split(".").pop() || "").toLowerCase();
+  return ({
+    js:   "javascript",
+    ts:   "typescript",
+    html: "html",
+    css:  "css",
+    json: "json",
+  })[ext] || "javascript";
+}
+
+function isValidUsername(v) {
+  return typeof v === "string" && v.trim().length > 0 && v.trim().length <= 20;
+}
+const savedUsername = ls.get(LS_USERNAME_KEY);
+if (isValidUsername(savedUsername)) document.getElementById("username").value = savedUsername.trim();
+
+function sanitiseRoomId(r) {
+  return typeof r === "string" ? r.replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 30) : "";
+}
+function sanitisePath(p) {
+  return typeof p === "string" ? p.replace(/[^a-zA-Z0-9._-]/g, "").slice(0, 60) : "";
+}
+
+const urlParams   = new URLSearchParams(window.location.search);
+const roomFromURL = sanitiseRoomId(urlParams.get("room") || "");
+if (roomFromURL) {
+  document.getElementById("room-input").value = roomFromURL;
+  if (isValidUsername(savedUsername)) {
+    window._autoJoin = () => {
+      window._pendingJoin = { room: roomFromURL, username: savedUsername.trim() };
+      socket.emit("check_room", { room: roomFromURL });
+    };
+  }
+}
+
+function onUsernameBlur() {
+  const v = document.getElementById("username").value.trim();
+  if (isValidUsername(v)) ls.set(LS_USERNAME_KEY, v);
+}
+
+// ═══════════════════════════════════════════════════════════════
+// CONNECTION
+// ═══════════════════════════════════════════════════════════════
+socket.on("connect", () => {
+  setConn(true);
+  if (room && username) {
+    socket.emit("join_room", { room, username });
+    showToast("Reconnected", "success");
+  }
+});
+socket.on("disconnect", () => setConn(false));
+function setConn(on) {
+  document.getElementById("conn-dot").classList.toggle("online", on);
+  document.getElementById("conn-label").textContent = on ? "Connected" : "Reconnecting…";
+}
+
+// ═══════════════════════════════════════════════════════════════
+// JOIN / CREATE / LEAVE
+// ═══════════════════════════════════════════════════════════════
+document.getElementById("room-input").addEventListener("input", () => {
+  const val = sanitiseRoomId(document.getElementById("room-input").value.trim());
+  const btn = document.getElementById("join-btn");
+  btn.disabled = true; btn.textContent = "Join Room"; btn.style.opacity = "0.5";
+  _pendingIsPrivate = false;
+  clearTimeout(roomCheckTimer);
+  if (val) roomCheckTimer = setTimeout(() => socket.emit("check_room", { room: val }), 300);
+});
+
+socket.on("room_exists", ({ room: id, exists, isPrivate }) => {
+  const current = sanitiseRoomId(document.getElementById("room-input").value.trim());
+  const btn     = document.getElementById("join-btn");
+  if (id === current) {
+    _pendingIsPrivate = Boolean(isPrivate);
+    btn.disabled    = !exists;
+    btn.textContent = !exists ? "Room not found" : (isPrivate ? "🔒 Join Room" : "Join Room");
+    btn.style.opacity = exists ? "1" : "0.5";
+  }
+  if (!window._pendingJoin || window._pendingJoin.room !== id) return;
+  const { username: u } = window._pendingJoin;
+  window._pendingJoin = null;
+  if (!exists) { showToast("Room not found", "error"); return; }
+  isPrivate ? _openPasswordModal(id, u) : _doJoin(id, u, null);
+});
+
+function createRoom() {
+  const u = document.getElementById("username").value.trim();
+  if (!isValidUsername(u)) { showToast("Enter your name first", "error"); return; }
+  document.getElementById("private-toggle").checked = false;
+  document.getElementById("password-field-row").classList.remove("visible");
+  document.getElementById("room-password-input").value = "";
+  document.getElementById("create-error").textContent = "";
+  document.getElementById("create-modal").classList.add("open");
+}
+function onPrivateToggle() {
+  const on = document.getElementById("private-toggle").checked;
+  document.getElementById("password-field-row").classList.toggle("visible", on);
+  if (on) document.getElementById("room-password-input").focus();
+}
+function closeCreateModal() { document.getElementById("create-modal").classList.remove("open"); }
+function submitCreateRoom() {
+  const u        = document.getElementById("username").value.trim();
+  const isPriv   = document.getElementById("private-toggle").checked;
+  const password = document.getElementById("room-password-input").value;
+  const errEl    = document.getElementById("create-error");
+  if (isPriv && password.trim().length < 4) { errEl.textContent = "Password must be ≥ 4 characters."; return; }
+  errEl.textContent = "";
+  const words = ["amber","blue","cedar","dawn","echo","flux","gray","haze","iris","jade","kite","lime","mist","nova","onyx","pine","quartz","reef","sage","teal","umber","vale","wave","zest"];
+  const id = `${words[Math.floor(Math.random()*words.length)]}-${words[Math.floor(Math.random()*words.length)]}-${Math.floor(1000+Math.random()*9000)}`;
+  closeCreateModal();
+  socket.emit("create_room", { room: id, username: u, isPrivate: isPriv, password: isPriv ? password.trim() : "" });
+}
+socket.on("room_created", ({ ok, room: id, reason, isPrivate, roomsCreated }) => {
+  if (!ok) { showToast(reason || "Could not create room", "error"); return; }
+  document.getElementById("room-input").value = id;
+  if (roomsCreated !== undefined) updateRoomsCreatedBadge(roomsCreated);
+  _doJoin(id, null, null, isPrivate);
+});
+
+function joinRoom() {
+  const r = sanitiseRoomId(document.getElementById("room-input").value.trim());
+  const u = document.getElementById("username").value.trim();
+  if (!r) { showToast("Enter a room ID", "error"); return; }
+  if (!isValidUsername(u)) { showToast("Enter a valid name", "error"); return; }
+  window._pendingJoin = { room: r, username: u };
+  socket.emit("check_room", { room: r });
+}
+
+function _openPasswordModal(roomId, uname) {
+  _pwTarget = { room: roomId, username: uname };
+  document.getElementById("pw-input").value = "";
+  document.getElementById("pw-error").textContent = "";
+  document.getElementById("pw-input").classList.remove("shake");
+  document.getElementById("pw-modal").classList.add("open");
+  setTimeout(() => document.getElementById("pw-input").focus(), 80);
+}
+function cancelPasswordModal() { document.getElementById("pw-modal").classList.remove("open"); _pwTarget = null; }
+function submitPassword() {
+  if (!_pwTarget) return;
+  const pw = document.getElementById("pw-input").value;
+  if (!pw.trim()) { document.getElementById("pw-error").textContent = "Enter the password."; return; }
+  _doJoin(_pwTarget.room, _pwTarget.username, pw.trim());
+  document.getElementById("pw-modal").classList.remove("open");
+  _pwTarget = null;
+}
+
+socket.on("join_error", ({ reason, needsPassword }) => {
+  if (needsPassword && _pwTarget) {
+    const inp = document.getElementById("pw-input");
+    document.getElementById("pw-error").textContent = reason || "Incorrect password";
+    inp.value = ""; inp.classList.remove("shake"); void inp.offsetWidth; inp.classList.add("shake");
+    document.getElementById("pw-modal").classList.add("open");
+    return;
+  }
+  showToast(reason || "Could not join room", "error");
+  if (room) socket.emit("leave_room", { room, username });
+  _resetToLobby();
+});
+
+function _doJoin(id, u, password, isPrivate) {
+  const resolvedUser = u || document.getElementById("username").value.trim();
+  if (!isValidUsername(resolvedUser)) { showToast("Enter a valid name", "error"); return; }
+  if (room && room !== id) { socket.emit("leave_room", { room, username }); room = ""; username = ""; }
+  username = resolvedUser;
+  room     = id;
+  ls.set(LS_USERNAME_KEY, username);
+  socket.emit("join_room", { room, username, password: password || "" });
+  const url = new URL(window.location.href);
+  url.searchParams.set("room", room);
+  window.history.pushState({ room, username }, "", url.toString());
+  document.getElementById("join-row").style.display      = "none";
+  document.getElementById("room-controls").style.display = "flex";
+  document.getElementById("room-badge").classList.add("visible");
+  document.getElementById("room-badge-name").textContent = room;
+  const pb = document.getElementById("room-private-badge");
+  if (pb) pb.style.display = isPrivate ? "inline-flex" : "none";
+  document.getElementById("no-room-overlay").classList.add("hidden");
+  showToast(`Joined room: ${room}`, "success");
+  // Record in My Rooms history — role determined by whether this socket created it
+  recordRoom(room, isCreator ? "created" : "joined");
+}
+
+function leaveRoom() {
+  if (!room) return;
+  socket.emit("leave_room", { room, username });
+  _resetToLobby();
+}
+
+// ── DELETE ROOM (creator only) ──────────────────────────────────────────────
+function deleteRoom() {
+  if (!room || !isCreator) return;
+  showConfirmToast(
+    `Delete room <b>${esc(room)}</b>? This will close the room for <b>all participants</b> and cannot be undone.`,
+    () => socket.emit("delete_room", { room })
+  );
+}
+
+// Server kicks everyone out when room is deleted
+socket.on("room_deleted", ({ room: id, by }) => {
+  const wasCreator = isCreator;
+  // Mark this room as deleted in localStorage so the My Rooms panel
+  // shows it as gone and prevents re-joining it
+  markRoomDeleted(id);
+  _resetToLobby(true);  // silent — suppress "Left room" toast
+  showToast(
+    wasCreator ? `Room "${id}" deleted.` : `Room "${id}" was deleted by the creator.`,
+    wasCreator ? "success" : "error"
+  );
+});
+
+socket.on("delete_room_error", ({ reason }) => showToast(reason, "error"));
+
+// ── ROOMS CREATED BADGE ─────────────────────────────────────────────────────
+function updateRoomsCreatedBadge(count) {
+  if (!count || count < 1) return;
+  const badge = document.getElementById("rooms-created-badge");
+  document.getElementById("rooms-created-count").textContent = count;
+  badge.classList.add("visible");
+}
+
+// ═══════════════════════════════════════════════════════════════
+// MY ROOMS — localStorage-backed room history
+// Each entry: { id, role: "created"|"joined", joinedAt: ISO string }
+// Max 50 entries, newest first.
+// ═══════════════════════════════════════════════════════════════
+const MY_ROOMS_MAX = 50;
+
+function loadMyRooms() {
+  try {
+    const raw = localStorage.getItem(LS_MY_ROOMS_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch { return []; }
+}
+
+function saveMyRooms(list) {
+  try { ls.setRaw(LS_MY_ROOMS_KEY, JSON.stringify(list)); } catch {}
+}
+
+function recordRoom(roomId, role) {
+  if (!roomId) return;
+  let list = loadMyRooms();
+  // Remove existing entry for this room so we can re-insert at top
+  list = list.filter(r => r.id !== roomId);
+  list.unshift({ id: roomId, role, joinedAt: new Date().toISOString(), deleted: false });
+  if (list.length > MY_ROOMS_MAX) list = list.slice(0, MY_ROOMS_MAX);
+  saveMyRooms(list);
+  renderMyRooms();
+}
+
+function markRoomDeleted(roomId) {
+  let list = loadMyRooms();
+  list = list.map(r => r.id === roomId ? { ...r, deleted: true, deletedAt: new Date().toISOString() } : r);
+  saveMyRooms(list);
+  renderMyRooms();
+  // Auto-remove the entry after 30 seconds so the list self-cleans
+  setTimeout(() => removeMyRoom(roomId), 30_000);
+}
+
+function removeMyRoom(roomId) {
+  let list = loadMyRooms().filter(r => r.id !== roomId);
+  saveMyRooms(list);
+  renderMyRooms();
+}
+
+function fmtRoomTime(iso) {
+  try {
+    const d   = new Date(iso);
+    const now = new Date();
+    const diffMs  = now - d;
+    const diffMin = Math.floor(diffMs / 60000);
+    const diffHr  = Math.floor(diffMin / 60);
+    const diffDay = Math.floor(diffHr / 24);
+    if (diffMin < 1)  return "just now";
+    if (diffMin < 60) return `${diffMin}m ago`;
+    if (diffHr  < 24) return `${diffHr}h ago`;
+    if (diffDay < 7)  return `${diffDay}d ago`;
+    return d.toLocaleDateString(undefined, { month:"short", day:"numeric" });
+  } catch { return ""; }
+}
+
+function renderMyRooms() {
+  const list      = loadMyRooms();
+  const container = document.getElementById("my-rooms-list");
+  if (!list.length) {
+    container.innerHTML = `<div id="my-rooms-empty">No rooms yet. Create or join one!</div>`;
+    return;
+  }
+  container.innerHTML = list.map(entry => {
+    const isActive  = entry.id === room;
+    const isDeleted = Boolean(entry.deleted);
+
+    if (isDeleted) {
+      return `<div class="room-entry" style="opacity:0.4;cursor:default;" title="This room was deleted">
+        <span class="re-badge" style="background:#2a1010;color:var(--danger);border:1px solid var(--danger);font-size:0.58rem;padding:1px 5px;border-radius:3px;font-weight:700;flex-shrink:0;">DELETED</span>
+        <span class="re-name" style="color:var(--muted);text-decoration:line-through;" title="${esc(entry.id)}">${esc(entry.id)}</span>
+        <span class="re-time">${fmtRoomTime(entry.deletedAt || entry.joinedAt)}</span>
+        <span class="re-join-btn" style="background:transparent;color:var(--muted);font-size:0.72rem;padding:2px 4px;opacity:1;"
+              onclick="removeMyRoom('${esc(entry.id)}');event.stopPropagation()" title="Dismiss">✕</span>
+      </div>`;
+    }
+
+    const badgeCls = entry.role === "created" ? "created" : "joined";
+    const badgeTxt = entry.role === "created" ? "CREATED" : "JOINED";
+    return `<div class="room-entry${isActive ? " active-room" : ""}"
+                 onclick="quickJoinRoom('${esc(entry.id)}')">
+      <span class="re-badge ${badgeCls}">${badgeTxt}</span>
+      <span class="re-name" title="${esc(entry.id)}">${esc(entry.id)}</span>
+      <span class="re-time">${fmtRoomTime(entry.joinedAt)}</span>
+      ${isActive
+        ? `<span style="font-size:0.62rem;color:var(--success);flex-shrink:0;">● live</span>`
+        : `<button class="re-join-btn" onclick="quickJoinRoom('${esc(entry.id)}');event.stopPropagation()">Join</button>`
+      }
+      <span class="re-join-btn" style="background:transparent;color:var(--muted);font-size:0.72rem;padding:2px 4px;"
+            onclick="confirmRemoveRoom('${esc(entry.id)}');event.stopPropagation()" title="Remove from list">✕</span>
+    </div>`;
+  }).join("");
+}
+
+function quickJoinRoom(roomId) {
+  if (roomId === room) return; // already in it
+  // Block joining a room that was deleted during this session
+  const entry = loadMyRooms().find(r => r.id === roomId);
+  if (entry?.deleted) {
+    showToast("This room was deleted and no longer exists.", "error");
+    return;
+  }
+  const u = document.getElementById("username").value.trim()
+            || ls.get(LS_USERNAME_KEY) || "";
+  if (!u) { showToast("Enter your name first", "error"); return; }
+  // Pre-fill the room input and trigger a join
+  document.getElementById("room-input").value = roomId;
+  window._pendingJoin = { room: roomId, username: u };
+  socket.emit("check_room", { room: roomId });
+}
+
+function confirmRemoveRoom(roomId) {
+  showConfirmToast(
+    `Remove <b>${esc(roomId)}</b> from your rooms list?`,
+    () => removeMyRoom(roomId)
+  );
+}
+
+function toggleMyRoomsPanel() {
+  myRoomsPanelOpen = !myRoomsPanelOpen;
+  document.getElementById("my-rooms-panel").classList.toggle("collapsed", !myRoomsPanelOpen);
+  document.getElementById("my-rooms-toggle-icon").textContent = myRoomsPanelOpen ? "▲" : "▼";
+}
+
+// Re-render timestamps every minute so "Xm ago" stays fresh
+setInterval(renderMyRooms, 60_000);
+
+// Render on load from existing localStorage data
+renderMyRooms();
+function _resetToLobby(silent) {
+  room = ""; username = ""; fileVersions = {}; projectFiles = {}; activeFile = ""; openTabs = [];
+  isCreator = false;
+  document.getElementById("delete-room-btn").style.display = "none";
+  document.getElementById("room-controls").style.display = "none";
+  document.getElementById("join-row").style.display      = "flex";
+  document.getElementById("room-badge").classList.remove("visible");
+  document.getElementById("version-badge").textContent   = "";
+  const pb = document.getElementById("room-private-badge");
+  if (pb) pb.style.display = "none";
+  const saved = ls.get(LS_USERNAME_KEY);
+  if (isValidUsername(saved)) document.getElementById("username").value = saved.trim();
+  const btn = document.getElementById("join-btn");
+  btn.disabled = true; btn.textContent = "Join Room"; btn.style.opacity = "0.5";
+  document.getElementById("room-input").value = "";
+  document.getElementById("chat-messages").innerHTML = "";
+  document.getElementById("users-list").innerHTML    = "";
+  document.getElementById("user-count").textContent  = "0";
+  document.getElementById("tabs-bar").innerHTML      = "";
+  document.getElementById("file-list").innerHTML     = "";
+  document.getElementById("file-count").textContent  = "0/10";
+  clearHistoryPanel();
+  document.getElementById("no-room-overlay").classList.remove("hidden");
+  // Reset output panel from any preview mode
+  setConsoleMode(true);
+  renderMyRooms();
+  const url = new URL(window.location.href);
+  url.searchParams.delete("room");
+  window.history.pushState({ room: null }, "", url.toString());
+  if (editor) { isRemoteUpdate = true; editor.setValue("// start coding..."); isRemoteUpdate = false; }
+  if (!silent) showToast("Left room", "");
+}
+
+window.addEventListener("popstate", (e) => {
+  const sr = e.state?.room;
+  if (sr && sr !== room) {
+    const u = ls.get(LS_USERNAME_KEY);
+    if (!isValidUsername(u)) return;
+    document.getElementById("room-input").value = sr;
+    window._pendingJoin = { room: sr, username: u.trim() };
+    socket.emit("check_room", { room: sr });
+  } else if (!sr && room) {
+    socket.emit("leave_room", { room, username });
+    _resetToLobby();
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════
+// ROOM STATE
+// ═══════════════════════════════════════════════════════════════
+socket.on("room_state", ({ files, activeFile: af, isPrivate, version, isCreator: ic, roomsCreated }) => {
+  projectFiles = {};
+  fileVersions = {};
+  openTabs     = [];
+
+  for (const [p, f] of Object.entries(files)) {
+    // PART 11: backward compat — old files with unsupported langs default to javascript
+    projectFiles[p] = { content: f.content, language: langFromPath(p) };
+    fileVersions[p] = 0;
+  }
+  activeFile = af || Object.keys(files)[0] || "main.js";
+  if (!openTabs.includes(activeFile)) openTabs = [activeFile];
+
+  const pb = document.getElementById("room-private-badge");
+  if (pb) pb.style.display = isPrivate ? "inline-flex" : "none";
+  document.getElementById("version-badge").textContent = `v${version || 0}`;
+
+  // Apply creator status — show/hide Delete Room button
+  isCreator = Boolean(ic);
+  document.getElementById("delete-room-btn").style.display = isCreator ? "inline-flex" : "none";
+
+  if (roomsCreated !== undefined) updateRoomsCreatedBadge(roomsCreated);
+
+  // Now we know the definitive role — update the rooms list entry
+  recordRoom(room, isCreator ? "created" : "joined");
+
+  if (editor) {
+    renderFileTree();
+    renderTabs();
+    openFileInEditor(activeFile);
+  } else {
+    window._pendingState = { files: projectFiles, activeFile };
+  }
+  loadVersionHistory();
+});
+
+// ═══════════════════════════════════════════════════════════════
+// FILE EXPLORER
+// ═══════════════════════════════════════════════════════════════
+function renderFileTree() {
+  const list  = document.getElementById("file-list");
+  const paths = Object.keys(projectFiles).sort();
+  document.getElementById("file-count").textContent = `${paths.length}/10`;
+
+  // PART 5: Restricted icon map — only supported languages
+  const iconMap = { js:"JS", ts:"TS", html:"HT", css:"CS", json:"{}" };
+
+  list.innerHTML = paths.map(p => {
+    const ext   = p.split(".").pop().toLowerCase();
+    const icon  = iconMap[ext] || "  ";
+    const isAct = p === activeFile;
+    return `<div class="file-item${isAct ? " active" : ""}" onclick="switchToFile('${esc(p)}')"
+                 ondblclick="openRenameModal('${esc(p)}')">
+      <span class="file-icon">${icon}</span>
+      <span class="file-label" title="${esc(p)}">${esc(p)}</span>
+      <span class="file-del" onclick="deleteFile('${esc(p)}',event)" title="Delete">✕</span>
+    </div>`;
+  }).join("");
+}
+
+function renderTabs() {
+  const bar = document.getElementById("tabs-bar");
+  bar.innerHTML = openTabs.map(p => `
+    <div class="tab${p === activeFile ? " active" : ""}" onclick="switchToFile('${esc(p)}')">
+      ${esc(p)}
+      <span class="tab-close" onclick="closeTab('${esc(p)}',event)" title="Close tab">✕</span>
+    </div>`).join("");
+}
+
+function switchToFile(p) {
+  if (!projectFiles[p]) return;
+  if (activeFile && editor) projectFiles[activeFile].content = editor.getValue();
+  activeFile = p;
+  if (!openTabs.includes(p)) { openTabs.push(p); }
+  renderFileTree();
+  renderTabs();
+  openFileInEditor(p);
+  socket.emit("switch_file", { room, path: p });
+}
+
+function openFileInEditor(p) {
+  if (!editor || !projectFiles[p]) return;
+  const f = projectFiles[p];
+  currentLanguage = f.language;
+  // Sync dropdown to file language — only show if it's a supported option
+  const sel = document.getElementById("lang-select");
+  if ([...sel.options].some(o => o.value === f.language)) {
+    sel.value = f.language;
+  }
+  isRemoteUpdate = true;
+  monaco.editor.setModelLanguage(editor.getModel(), f.language);
+  if (editor.getValue() !== f.content) {
+    const pos = editor.getPosition();
+    const st  = editor.getScrollTop();
+    editor.setValue(f.content);
+    if (pos) editor.setPosition(pos);
+    editor.setScrollTop(st);
+  }
+  isRemoteUpdate = false;
+}
+
+function closeTab(p, ev) {
+  ev.stopPropagation();
+  openTabs = openTabs.filter(t => t !== p);
+  if (activeFile === p) {
+    activeFile = openTabs[openTabs.length - 1] || Object.keys(projectFiles)[0] || "";
+  }
+  renderTabs();
+  renderFileTree();
+  if (activeFile) openFileInEditor(activeFile);
+}
+
+function handleNewFileKey(e) { if (e.key === "Enter") submitNewFile(); }
+function submitNewFile() {
+  const inp  = document.getElementById("new-file-input");
+  const name = sanitisePath(inp.value.trim());
+  if (!name) return;
+  if (!name.includes(".")) { showToast("Include a file extension, e.g. utils.js", "error"); return; }
+  if (projectFiles[name]) { showToast("File already exists", "error"); return; }
+  inp.value = "";
+  socket.emit("create_file", { room, path: name, language: langFromPath(name) });
+}
+
+function deleteFile(p, ev) {
+  ev.stopPropagation();
+  if (Object.keys(projectFiles).length <= 1) { showToast("Cannot delete the last file", "error"); return; }
+  showConfirmToast(`Delete <b>${esc(p)}</b>? This cannot be undone.`, () => {
+    socket.emit("delete_file", { room, path: p });
+  });
+}
+
+function openRenameModal(p) {
+  _renameTarget = p;
+  document.getElementById("rename-input").value = p;
+  document.getElementById("rename-error").textContent = "";
+  document.getElementById("rename-modal").classList.add("open");
+  const inp = document.getElementById("rename-input");
+  inp.focus(); inp.select();
+}
+function closeRenameModal() { document.getElementById("rename-modal").classList.remove("open"); _renameTarget = null; }
+function submitRename() {
+  const newName = sanitisePath(document.getElementById("rename-input").value.trim());
+  const errEl   = document.getElementById("rename-error");
+  if (!newName) { errEl.textContent = "Enter a file name."; return; }
+  if (!newName.includes(".")) { errEl.textContent = "Include a file extension."; return; }
+  if (projectFiles[newName]) { errEl.textContent = "A file with that name already exists."; return; }
+  socket.emit("rename_file", { room, oldPath: _renameTarget, newPath: newName });
+  closeRenameModal();
+}
+
+socket.on("file_tree_update", ({ files, activeFile: serverAf }) => {
+  const newFiles = {};
+  for (const [p, f] of Object.entries(files)) {
+    newFiles[p] = projectFiles[p]
+      ? { content: projectFiles[p].content, language: langFromPath(p) }
+      : { content: "", language: langFromPath(p) };
+    if (!fileVersions[p]) fileVersions[p] = 0;
+  }
+  openTabs = openTabs.filter(t => newFiles[t]);
+  projectFiles = newFiles;
+  if (!projectFiles[activeFile]) {
+    activeFile = serverAf || Object.keys(projectFiles)[0] || "";
+    if (activeFile && !openTabs.includes(activeFile)) openTabs.push(activeFile);
+    if (editor && activeFile) openFileInEditor(activeFile);
+  }
+  renderFileTree();
+  renderTabs();
+});
+
+socket.on("file_error", ({ reason }) => showToast(reason, "error"));
+
+socket.on("user_switched_file", ({ username: u, path: p }) => {
+  const badge = document.getElementById("remote-cursor-badge");
+  badge.textContent = `${esc(u)} → ${esc(p)}`;
+  badge.classList.add("visible");
+  clearTimeout(badge._t);
+  badge._t = setTimeout(() => badge.classList.remove("visible"), 2500);
+});
+
+// ═══════════════════════════════════════════════════════════════
+// USERS
+// ═══════════════════════════════════════════════════════════════
+socket.on("room_users", (users) => {
+  document.getElementById("user-count").textContent = users.length;
+  document.getElementById("users-list").innerHTML =
+    users.map(u => `<div class="user-chip"><span class="dot"></span>${esc(u)}</div>`).join("");
+});
+
+// ═══════════════════════════════════════════════════════════════
+// CHAT
+// ═══════════════════════════════════════════════════════════════
+function handleChatKey(e) { if (e.key === "Enter") sendMessage(); }
+function sendMessage() {
+  const inp = document.getElementById("msg-input");
+  const msg = inp.value.trim();
+  if (!msg || !room) return;
+  socket.emit("send_message", { room, username, message: msg });
+  inp.value = "";
+  stopTypingSignal();
+}
+socket.on("receive_message", ({ username: sender, message, time }) => {
+  const isSelf = sender === username;
+  const chat   = document.getElementById("chat-messages");
+  chat.innerHTML += `<div class="msg${isSelf?" self":""}">
+    <div class="msg-meta"><span class="sender${isSelf?" self":""}">${esc(sender)}</span> · ${time}</div>
+    <div class="msg-bubble">${esc(message)}</div></div>`;
+  chat.scrollTop = chat.scrollHeight;
+});
+function handleTyping() {
+  if (!room) return;
+  if (!isTyping) { isTyping = true; socket.emit("typing", { room, username }); }
+  clearTimeout(typingTimer);
+  typingTimer = setTimeout(stopTypingSignal, 1800);
+}
+function stopTypingSignal() {
+  if (!isTyping) return;
+  isTyping = false; socket.emit("stop_typing", { room });
+}
+socket.on("user_typing",      (u) => { document.getElementById("typing-indicator").textContent = `${u} is typing…`; });
+socket.on("user_stop_typing", ()  => { document.getElementById("typing-indicator").textContent = ""; });
+
+// ═══════════════════════════════════════════════════════════════
+// LANGUAGE CHANGE
+// ═══════════════════════════════════════════════════════════════
+function changeLanguage(lang) {
+  currentLanguage = lang;
+  if (projectFiles[activeFile]) projectFiles[activeFile].language = lang;
+  if (editor) monaco.editor.setModelLanguage(editor.getModel(), lang);
+  socket.emit("language_change", { room, path: activeFile, language: lang });
+}
+socket.on("receive_language", ({ path: p, language }) => {
+  if (projectFiles[p]) projectFiles[p].language = language;
+  if (p === activeFile) {
+    currentLanguage = language;
+    const sel = document.getElementById("lang-select");
+    if ([...sel.options].some(o => o.value === language)) sel.value = language;
+    if (editor) monaco.editor.setModelLanguage(editor.getModel(), language);
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════
+// CODE SYNC
+// ═══════════════════════════════════════════════════════════════
+function applyRemoteCode(content) {
+  if (!editor) return;
+  const model = editor.getModel();
+  if (model.getValue() === content) return;
+  const cursor = editor.getPosition();
+  const st     = editor.getScrollTop();
+  const sl     = editor.getScrollLeft();
+  isRemoteUpdate = true;
+  editor.executeEdits("remote", [{
+    range: model.getFullModelRange(), text: content, forceMoveMarkers: true
+  }]);
+  isRemoteUpdate = false;
+  if (cursor) editor.setPosition(cursor);
+  editor.setScrollTop(st); editor.setScrollLeft(sl);
+}
+
+socket.on("receive_file_change", ({ path: p, content, version }) => {
+  fileVersions[p] = version;
+  if (projectFiles[p]) projectFiles[p].content = content;
+  const maxV = Math.max(...Object.values(fileVersions));
+  document.getElementById("version-badge").textContent = `v${maxV}`;
+  if (p === activeFile) applyRemoteCode(content);
+});
+
+socket.on("file_resync", ({ path: p, content, version }) => {
+  fileVersions[p] = version;
+  if (projectFiles[p]) projectFiles[p].content = content;
+  if (p === activeFile) {
+    applyRemoteCode(content);
+    showToast(`File ${p} resynced`, "");
+  }
+});
+
+socket.on("file_version_ack", ({ path: p, version }) => {
+  fileVersions[p] = version;
+  const maxV = Math.max(...Object.values(fileVersions));
+  document.getElementById("version-badge").textContent = `v${maxV}`;
+});
+
+// ═══════════════════════════════════════════════════════════════
+// CURSOR SYNC
+// ═══════════════════════════════════════════════════════════════
+function emitCursor(position) {
+  pendingCursorPos = position;
+  if (cursorThrottleTimer) return;
+  cursorThrottleTimer = setTimeout(() => {
+    if (pendingCursorPos && room) {
+      socket.emit("cursor_move", { room, username, position: pendingCursorPos, path: activeFile });
+    }
+    cursorThrottleTimer = null; pendingCursorPos = null;
+  }, CURSOR_THROTTLE_MS);
+}
+socket.on("remote_cursor", ({ username: u, position, path: p }) => {
+  if (p !== activeFile) return;
+  const badge = document.getElementById("remote-cursor-badge");
+  badge.textContent = `${esc(u)}: Ln ${position.lineNumber}, Col ${position.column}`;
+  badge.classList.add("visible");
+  clearTimeout(badge._t);
+  badge._t = setTimeout(() => badge.classList.remove("visible"), 3000);
+});
+
+// ═══════════════════════════════════════════════════════════════
+// OUTPUT PANEL MODES (PART 9)
+// ═══════════════════════════════════════════════════════════════
+
+// Switch output panel to plain console text mode
+function setConsoleMode(resetMessage) {
+  const panel = document.getElementById("output-panel");
+  panel.classList.remove("preview-mode");
+  document.getElementById("output-label").textContent = "Output";
+  document.getElementById("preview-frame").srcdoc = "";
+  if (resetMessage) {
+    document.getElementById("output-body").innerHTML =
+      `<span class="out-info">Run your code to see output here.</span>`;
+  }
+}
+
+// Switch output panel to iframe preview mode (HTML projects)
+function setPreviewMode() {
+  const panel = document.getElementById("output-panel");
+  panel.classList.add("preview-mode");
+  document.getElementById("output-label").textContent = "Preview";
+  if (outputCollapsed) {
+    outputCollapsed = false;
+    panel.classList.remove("collapsed");
+    document.querySelector("#output-header .toggle-icon").textContent = "▼";
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// RUN / SAVE / OUTPUT (PARTS 6–10)
+// ═══════════════════════════════════════════════════════════════
+
+// Route by the ACTIVE file's language, not by what exists in the whole project.
+// This fixes the edge case: switching to a .js file after an HTML preview run
+// now correctly snaps the panel back to console mode immediately on ▶ Run.
+function runCode() {
+  // Save active editor content first
+  if (activeFile && editor) projectFiles[activeFile].content = editor.getValue();
+
+  const activeLang = (projectFiles[activeFile] && projectFiles[activeFile].language) || currentLanguage;
+  const isHtmlRun  = activeLang === "html";
+
+  if (isHtmlRun) {
+    // ── HTML preview mode ─────────────────────────────────────
+    const cssFiles = Object.entries(projectFiles).filter(([p]) => p.endsWith(".css"));
+    const jsFiles  = Object.entries(projectFiles).filter(([p]) => p.endsWith(".js") || p.endsWith(".ts"));
+
+    const cssContent = cssFiles.map(([, f]) => f.content).join("\n\n");
+
+    // Strip wrapper tags so the HTML body embeds cleanly
+    const stripShell = (html) =>
+      html
+        .replace(/<!DOCTYPE[^>]*>/gi, "")
+        .replace(/<\/?html[^>]*>/gi, "")
+        .replace(/<head[\s\S]*?<\/head>/gi, "")
+        .replace(/<\/?body[^>]*>/gi, "")
+        .trim();
+
+    const htmlBody = stripShell(projectFiles[activeFile].content);
+
+    // Wrap JS in try/catch so errors surface in DevTools
+    const jsContent = jsFiles.map(([, f]) => f.content).join("\n\n");
+    const safeJs = jsContent
+      ? `try {\n${jsContent}\n} catch(e) { console.error(e); }`
+      : "";
+
+    const previewDoc = `<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<style>
+${cssContent}
+</style>
+</head>
+<body>
+${htmlBody}
+<script>
+${safeJs}
+<\/script>
+</body>
+</html>`;
+
+    setPreviewMode();
+    document.getElementById("preview-frame").srcdoc = previewDoc;
+    document.getElementById("output-run-badge").textContent = new Date().toLocaleTimeString();
+
+  } else {
+    // ── JS / TS console mode ──────────────────────────────────
+    // Always switch back to console mode FIRST — before the room check —
+    // so the panel never stays stuck in preview when running non-HTML files.
+    setConsoleMode(true);
+
+    if (!room) { showToast("Join a room first to run JS/TS", "error"); return; }
+
+    const code = editor ? editor.getValue() : "";
+    socket.emit("run_code", { room, code, language: currentLanguage });
+    document.getElementById("output-run-badge").textContent = "running…";
+  }
+}
+
+// Server sends console output only for non-HTML JS execution
+socket.on("code_output", (output) => {
+  // If we're in preview mode a stale code_output may arrive — ignore it
+  if (document.getElementById("output-panel").classList.contains("preview-mode")) return;
+  const isErr = /^(runtime error|error)/i.test(output);
+  document.getElementById("output-body").innerHTML = `<span class="${isErr?"out-error":""}">${esc(output)}</span>`;
+  document.getElementById("output-run-badge").textContent = new Date().toLocaleTimeString();
+  if (outputCollapsed) toggleOutput();
+});
+
+function saveCode() {
+  if (!room || !activeFile) { showToast("Open a file first", "error"); return; }
+  const code = editor ? editor.getValue() : "";
+  const a    = document.createElement("a");
+  a.href     = URL.createObjectURL(new Blob([code], { type:"text/plain" }));
+  a.download = activeFile;
+  a.click();
+  showToast(`Saved ${activeFile}`, "success");
+}
+
+function toggleOutput() {
+  outputCollapsed = !outputCollapsed;
+  document.getElementById("output-panel").classList.toggle("collapsed", outputCollapsed);
+  document.querySelector("#output-header .toggle-icon").textContent = outputCollapsed ? "▲" : "▼";
+}
+
+// ═══════════════════════════════════════════════════════════════
+// INVITE MODAL
+// ═══════════════════════════════════════════════════════════════
+function openInviteModal() {
+  const url = new URL(window.location.href);
+  url.searchParams.set("room", room);
+  document.getElementById("invite-url").value = url.toString();
+  document.getElementById("invite-modal").classList.add("open");
+}
+function closeInviteModal(e) {
+  if (!e || e.target === document.getElementById("invite-modal"))
+    document.getElementById("invite-modal").classList.remove("open");
+}
+function copyInviteLink() {
+  const val = document.getElementById("invite-url").value;
+  navigator.clipboard.writeText(val).then(() => {
+    showToast("Invite link copied!", "success"); closeInviteModal();
+  }).catch(() => {
+    document.getElementById("invite-url").select(); document.execCommand("copy");
+    showToast("Link copied!", "success"); closeInviteModal();
+  });
+}
+document.addEventListener("keydown", e => {
+  if (e.key === "Escape") {
+    closeInviteModal(); cancelPasswordModal();
+    closeCreateModal(); closeRenameModal();
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════
+// VERSION HISTORY
+// ═══════════════════════════════════════════════════════════════
+function toggleHistoryPanel() {
+  historyPanelOpen = !historyPanelOpen;
+  document.getElementById("history-panel").classList.toggle("collapsed", !historyPanelOpen);
+  document.getElementById("history-toggle-icon").textContent = historyPanelOpen ? "▲" : "▼";
+}
+function loadVersionHistory() {
+  if (!room) return;
+  socket.emit("get_versions", { room });
+}
+function fmtHistoryTime(raw) {
+  if (!raw) return "";
+  try {
+    const d  = new Date(raw.replace(" ", "T"));
+    const hh = String(d.getHours()).padStart(2,"0");
+    const mm = String(d.getMinutes()).padStart(2,"0");
+    const mo = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][d.getMonth()];
+    return `${hh}:${mm} · ${mo} ${d.getDate()}`;
+  } catch { return raw; }
+}
+socket.on("versions_list", ({ versions }) => {
+  const list = document.getElementById("history-list");
+  if (!versions?.length) {
+    list.innerHTML = `<div id="history-empty">No snapshots yet.<br>Edit code or click ⚑.</div>`;
+    return;
+  }
+  list.innerHTML = versions.map(v => `
+    <div class="history-item${currentRestoredVer===v.version_number?" active":""}"
+         onclick="confirmRestore(${v.version_number})">
+      <span class="h-ver">v${v.version_number}</span>
+      <span class="h-time">${fmtHistoryTime(v.created_at)}</span>
+      <span class="h-by">${v.saved_by ? esc(v.saved_by) : ""}</span>
+      <span class="h-restore">Restore</span>
+    </div>`).join("");
+});
+function confirmRestore(vn) {
+  showConfirmToast(`Restore project to v${vn}? All files will be overwritten for everyone.`,
+    () => socket.emit("restore_version", { room, versionNumber: vn }));
+}
+function saveCheckpoint() {
+  if (!room) { showToast("Join a room first", "error"); return; }
+  socket.emit("manual_checkpoint", { room });
+}
+socket.on("checkpoint_saved", ({ version }) => {
+  showToast(`✓ Checkpoint saved at v${version}`, "success");
+  loadVersionHistory();
+});
+socket.on("restore_error", ({ reason }) => showToast(reason || "Restore failed", "error"));
+
+socket.on("project_restored", ({ files, activeFile: af, version, restoredTo }) => {
+  currentRestoredVer = restoredTo;
+  projectFiles = {};
+  fileVersions = {};
+  for (const [p, f] of Object.entries(files)) {
+    projectFiles[p] = { content: f.content, language: langFromPath(p) };
+    fileVersions[p] = version;
+  }
+  activeFile = af || Object.keys(files)[0] || "main.js";
+  openTabs   = [activeFile];
+  document.getElementById("version-badge").textContent = `v${version}`;
+  renderFileTree(); renderTabs(); openFileInEditor(activeFile);
+  showToast(`↩ Restored to v${restoredTo}`, "success");
+  loadVersionHistory();
+});
+
+function clearHistoryPanel() {
+  currentRestoredVer = null;
+  document.getElementById("history-list").innerHTML = `<div id="history-empty">No snapshots yet.</div>`;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// CONFIRM TOAST
+// ═══════════════════════════════════════════════════════════════
+function showConfirmToast(message, onConfirm) {
+  const ex = document.getElementById("confirm-toast");
+  if (ex) ex.remove();
+  const el = document.createElement("div");
+  el.id = "confirm-toast";
+  el.style.cssText = `position:fixed;bottom:62px;right:20px;z-index:1000;
+    background:var(--surface2);border:1px solid var(--accent3);
+    padding:13px 15px;border-radius:8px;font-size:0.78rem;
+    box-shadow:0 8px 32px rgba(0,0,0,.6);max-width:290px;line-height:1.5;animation:fadeIn .2s ease;`;
+  el.innerHTML = `<div style="color:var(--accent3);margin-bottom:11px;">${message}</div>
+    <div style="display:flex;gap:7px;justify-content:flex-end;">
+      <button type="button" onclick="document.getElementById('confirm-toast').remove()"
+        style="padding:3px 10px;border-radius:5px;border:1px solid var(--border);
+               background:var(--surface);color:var(--muted);cursor:pointer;font-size:0.76rem;">Cancel</button>
+      <button type="button" id="confirm-toast-ok"
+        style="padding:3px 10px;border-radius:5px;border:none;
+               background:var(--accent);color:#fff;cursor:pointer;font-size:0.76rem;font-weight:600;">Confirm</button>
+    </div>`;
+  document.body.appendChild(el);
+  document.getElementById("confirm-toast-ok").addEventListener("click", () => { el.remove(); onConfirm(); });
+  setTimeout(() => { if (el.parentNode) el.remove(); }, 8000);
+}
+
+// ═══════════════════════════════════════════════════════════════
+// MONACO INIT
+// ═══════════════════════════════════════════════════════════════
+function initMonaco(cdnBase) {
+  require.config({ paths: { vs: cdnBase } });
+  require(["vs/editor/editor.main"], function () {
+    editor = monaco.editor.create(document.getElementById("editor-container"), {
+      value: "// start coding...", language: "javascript", theme: "vs-dark",
+      fontSize: 14, fontFamily: "'JetBrains Mono', monospace", fontLigatures: true,
+      minimap: { enabled: true }, automaticLayout: true, scrollBeyondLastLine: false,
+      lineNumbers: "on", renderLineHighlight: "all",
+      cursorBlinking: "smooth", smoothScrolling: true, padding: { top: 10 },
+    });
+
+    if (window._pendingState) {
+      const { files: pf, activeFile: paf } = window._pendingState;
+      window._pendingState = null;
+      if (pf) {
+        projectFiles = pf;
+        activeFile   = paf || Object.keys(pf)[0] || "main.js";
+        if (!openTabs.includes(activeFile)) openTabs = [activeFile];
+        renderFileTree();
+        renderTabs();
+        openFileInEditor(activeFile);
+      }
+    }
+
+    editor.onDidChangeModelContent(() => {
+      if (isRemoteUpdate || !room || !activeFile) return;
+      clearTimeout(codeDebounceTimer);
+      codeDebounceTimer = setTimeout(() => {
+        const content = editor.getValue();
+        if (projectFiles[activeFile]) projectFiles[activeFile].content = content;
+        fileVersions[activeFile] = (fileVersions[activeFile] || 0) + 1;
+        socket.emit("file_change", {
+          room, path: activeFile,
+          content, version: fileVersions[activeFile]
+        });
+      }, CODE_DEBOUNCE_MS);
+    });
+
+    editor.onDidChangeCursorPosition((e) => {
+      const { lineNumber, column } = e.position;
+      document.getElementById("cursor-info").textContent = `Ln ${lineNumber}, Col ${column}`;
+      emitCursor({ lineNumber, column });
+    });
+
+    if (window._autoJoin) { window._autoJoin(); window._autoJoin = null; }
+  });
+}
+
+function initFallbackEditor() {
+  const container = document.getElementById("editor-container");
+  container.innerHTML = `<textarea id="editor-fallback"
+    style="width:100%;height:100%;background:#1e1e1e;color:#d4d4d4;
+           font-family:'JetBrains Mono',monospace;font-size:14px;
+           padding:12px;border:none;outline:none;resize:none;"
+    spellcheck="false" placeholder="// start coding..."></textarea>`;
+  const ta = document.getElementById("editor-fallback");
+  editor = {
+    getValue:  () => ta.value,
+    setValue:  (v) => { ta.value = v; },
+    getModel:  () => ({ getFullModelRange: () => null }),
+    setPosition: () => {}, getPosition: () => null,
+    getScrollTop: () => 0, getScrollLeft: () => 0,
+    setScrollTop: () => {}, setScrollLeft: () => {},
+    executeEdits: (_, edits) => { if (edits[0]) ta.value = edits[0].text; },
+    onDidChangeModelContent: (cb) => ta.addEventListener("input", cb),
+    onDidChangeCursorPosition: () => {},
+  };
+  ta.addEventListener("input", () => {
+    if (isRemoteUpdate || !room || !activeFile) return;
+    clearTimeout(codeDebounceTimer);
+    codeDebounceTimer = setTimeout(() => {
+      const content = ta.value;
+      if (projectFiles[activeFile]) projectFiles[activeFile].content = content;
+      fileVersions[activeFile] = (fileVersions[activeFile] || 0) + 1;
+      socket.emit("file_change", { room, path: activeFile, content, version: fileVersions[activeFile] });
+    }, CODE_DEBOUNCE_MS);
+  });
+  if (window._autoJoin) { window._autoJoin(); window._autoJoin = null; }
+  showToast("Editor in compatibility mode (CDN blocked)", "");
+}
+
+if (typeof require === "function") {
+  try { initMonaco("https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs"); }
+  catch { try { initMonaco("https://unpkg.com/monaco-editor@0.45.0/min/vs"); }
+          catch { initFallbackEditor(); } }
+} else { initFallbackEditor(); }
+
+// ═══════════════════════════════════════════════════════════════
+// HELPERS
+// ═══════════════════════════════════════════════════════════════
+function esc(s) {
+  return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+}
+function showToast(msg, type="") {
+  const t = document.getElementById("toast");
+  t.textContent = msg; t.className = "show " + type;
+  clearTimeout(t._timer);
+  t._timer = setTimeout(() => { t.className = ""; }, 2800);
+}
+</script>
+
+<script type="application/ld+json">
+{
+  "@context":"https://schema.org","@type":"SoftwareApplication",
+  "name":"CodeSync","applicationCategory":"DeveloperApplication",
+  "operatingSystem":"Web","offers":{"@type":"Offer","price":"0","priceCurrency":"USD"},
+  "description":"Real-time collaborative code editor with multi-file projects, private rooms, version history.",
+  "url":"/"
+}
+</script>
+</body>
+</html>

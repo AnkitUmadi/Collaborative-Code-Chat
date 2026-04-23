@@ -1,0 +1,21 @@
+# Dependencies
+node_modules/
+
+# SQLite database files
+codesync.db
+codesync.db-shm
+codesync.db-wal
+
+# Saves/snapshots folder
+saves/
+
+# Shell scripts
+codesync-monitor.sh
+codesync-tune.sh
+
+# Environment variables
+.env
+
+# OS clutter
+.DS_Store
+Thumbs.db
