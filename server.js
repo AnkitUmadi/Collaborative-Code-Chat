@@ -9,7 +9,7 @@ const { Server } = require("socket.io");
 const path   = require("path");
 const crypto = require("crypto");
 
-const vh = require("./versionHistory");
+const vh = require("./VersionHistory");
 
 const rateLimit = require("express-rate-limit");
 
